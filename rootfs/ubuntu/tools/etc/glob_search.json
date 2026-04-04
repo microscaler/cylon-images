@@ -1,0 +1,13 @@
+{
+  "name": "glob_search",
+  "description": "Searches for files matching a glob pattern starting from a root directory.",
+  "executable_path": "/opt/cylon/bin/search.py",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "pattern": { "type": "string" },
+      "root": { "type": "string" }
+    },
+    "required": ["pattern", "root"]
+  }
+}

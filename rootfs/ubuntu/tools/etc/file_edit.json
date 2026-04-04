@@ -1,0 +1,14 @@
+{
+  "name": "file_edit",
+  "description": "Replaces exact text occurrences in a file. Returns the new file state or an error if the old text isn't found.",
+  "executable_path": "/opt/cylon/bin/file_edit.py",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "path": { "type": "string" },
+      "old_text": { "type": "string" },
+      "new_text": { "type": "string" }
+    },
+    "required": ["path", "old_text", "new_text"]
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "bash",
+  "description": "Executes a bash command in the system and returns its output.",
+  "executable_path": "/opt/cylon/bin/bash.sh",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "command": { "type": "string" }
+    },
+    "required": ["command"]
+  }
+}

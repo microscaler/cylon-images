@@ -1,0 +1,40 @@
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": ["@modelcontextprotocol/server-filesystem", "/var/lib/cylon/worktree"]
+    },
+    "fetch": {
+      "command": "/root/.local/bin/mcp-server-fetch",
+      "args": []
+    },
+    "git": {
+      "command": "/root/.local/bin/mcp-server-git",
+      "args": ["--repository", "/var/lib/cylon/worktree"]
+    },
+    "sqlite": {
+      "command": "/root/.local/bin/mcp-server-sqlite",
+      "args": ["--db-path", "/var/lib/cylon/agent.db"]
+    },
+    "github": {
+      "command": "npx",
+      "args": ["@modelcontextprotocol/server-github"]
+    },
+    "postgres": {
+      "command": "npx",
+      "args": ["@modelcontextprotocol/server-postgres", "postgresql://postgres:postgres@localhost/agentdb"]
+    },
+    "playwright": {
+      "command": "npx",
+      "args": ["@playwright/mcp"]
+    },
+    "memory": {
+      "command": "npx",
+      "args": ["@modelcontextprotocol/server-memory"]
+    },
+    "search": {
+      "command": "npx",
+      "args": ["@modelcontextprotocol/server-brave-search"]
+    }
+  }
+}
