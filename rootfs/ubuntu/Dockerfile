@@ -1,5 +1,8 @@
 FROM ubuntu:25.04
 
+# Expose buildx platform target argument
+ARG TARGETARCH
+
 # A minimal Ubuntu 25.04 image specifically tailored to be extracted into an ext4 rootfs for Firecracker
 # This image contains the core lifecycle dependencies necessary for Cylon to orchestrate and proxy the microVM.
 
@@ -58,9 +61,10 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no
     cargo install cargo-zigbuild
 
 # Install Zig Compiler
-RUN curl -Lo zig.tar.xz "https://ziglang.org/download/0.13.0/zig-linux-x86_64-0.13.0.tar.xz" && \
+RUN if [ "$TARGETARCH" = "arm64" ]; then ZIG_ARCH="aarch64"; else ZIG_ARCH="x86_64"; fi && \
+    curl -Lo zig.tar.xz "https://ziglang.org/download/0.13.0/zig-linux-${ZIG_ARCH}-0.13.0.tar.xz" && \
     tar xf zig.tar.xz && \
-    mv zig-linux-x86_64-0.13.0 /usr/local/zig && \
+    mv zig-linux-${ZIG_ARCH}-0.13.0 /usr/local/zig && \
     ln -s /usr/local/zig/zig /usr/local/bin/zig && \
     rm zig.tar.xz
 
@@ -70,12 +74,13 @@ RUN bash -c "bash < <(curl -s -S -L https://raw.githubusercontent.com/moovweb/gv
     echo 'source /root/.gvm/scripts/gvm' >> /etc/bash.bashrc
 
 # Install kind
-RUN curl -Lo /usr/local/bin/kind https://kind.sigs.k8s.io/dl/v0.22.0/kind-linux-amd64 && \
+RUN curl -Lo /usr/local/bin/kind https://kind.sigs.k8s.io/dl/v0.22.0/kind-linux-${TARGETARCH:-amd64} && \
     chmod +x /usr/local/bin/kind
 
 # Pre-cache KinD Node Image to prevent 1.3GB dynamic network downloads during agent cluster creation
-RUN curl -sL "https://github.com/google/go-containerregistry/releases/latest/download/go-containerregistry_Linux_x86_64.tar.gz" | tar -xz -C /usr/local/bin crane && \
-    crane pull docker.io/kindest/node:v1.34.3 /opt/kind-node.tar && \
+RUN if [ "$TARGETARCH" = "arm64" ]; then CRANE_ARCH="arm64"; else CRANE_ARCH="x86_64"; fi && \
+    curl -sL "https://github.com/google/go-containerregistry/releases/latest/download/go-containerregistry_Linux_${CRANE_ARCH}.tar.gz" | tar -xz -C /usr/local/bin crane && \
+    crane pull --platform linux/${TARGETARCH:-amd64} docker.io/kindest/node:v1.34.3 /opt/kind-node.tar && \
     echo "[Unit]\nDescription=Pre-load KinD Docker Image\nAfter=docker.service\nRequires=docker.service\n\n[Service]\nType=oneshot\nExecStart=/usr/bin/docker load -i /opt/kind-node.tar\nExecStartPost=/usr/bin/rm -f /opt/kind-node.tar\n\n[Install]\nWantedBy=multi-user.target" > /etc/systemd/system/preload-kind.service && \
     systemctl enable preload-kind.service
 
