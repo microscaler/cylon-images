@@ -92,6 +92,18 @@ RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/s
     curl -s https://fluxcd.io/install.sh | bash && \
     curl -s https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
+# Install Infrastructure as Code (IaC) tools and Google Cloud CLI
+RUN git clone --depth=1 https://github.com/tfutils/tfenv.git /root/.tfenv && \
+    ln -s /root/.tfenv/bin/* /usr/local/bin && \
+    tfenv install latest && tfenv use latest && \
+    git clone --depth=1 https://github.com/tgenv/tgenv.git /root/.tgenv && \
+    ln -s /root/.tgenv/bin/* /usr/local/bin && \
+    tgenv install latest && tgenv use latest && \
+    curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash && \
+    curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg && \
+    echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list && \
+    apt-get update && apt-get install -y google-cloud-cli
+
 # Pre-cache KinD Node Image to prevent 1.3GB dynamic network downloads during agent cluster creation
 RUN if [ "$TARGETARCH" = "arm64" ]; then CRANE_ARCH="arm64"; else CRANE_ARCH="x86_64"; fi && \
     curl -sL "https://github.com/google/go-containerregistry/releases/latest/download/go-containerregistry_Linux_${CRANE_ARCH}.tar.gz" | tar -xz -C /usr/local/bin crane && \
