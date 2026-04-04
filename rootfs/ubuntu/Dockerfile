@@ -27,6 +27,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     cmake \
     pkg-config \
     libssl-dev \
+    bison \
     postgresql \
     postgresql-contrib \
     docker.io \
@@ -53,7 +54,20 @@ ENV RUSTUP_HOME=/usr/local/rustup \
     CARGO_HOME=/usr/local/cargo \
     PATH=/usr/local/cargo/bin:$PATH
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path && \
-    chmod -R a+w $RUSTUP_HOME $CARGO_HOME
+    chmod -R a+w $RUSTUP_HOME $CARGO_HOME && \
+    cargo install cargo-zigbuild
+
+# Install Zig Compiler
+RUN curl -Lo zig.tar.xz "https://ziglang.org/download/0.13.0/zig-linux-x86_64-0.13.0.tar.xz" && \
+    tar xf zig.tar.xz && \
+    mv zig-linux-x86_64-0.13.0 /usr/local/zig && \
+    ln -s /usr/local/zig/zig /usr/local/bin/zig && \
+    rm zig.tar.xz
+
+# Install GVM (Go Version Manager)
+ENV GVM_NO_UPDATE_PROFILE=1
+RUN bash -c "bash < <(curl -s -S -L https://raw.githubusercontent.com/moovweb/gvm/master/binscripts/gvm-installer)" && \
+    echo 'source /root/.gvm/scripts/gvm' >> /etc/bash.bashrc
 
 # Install kind
 RUN curl -Lo /usr/local/bin/kind https://kind.sigs.k8s.io/dl/v0.22.0/kind-linux-amd64 && \
@@ -71,11 +85,12 @@ RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | b
     nvm install 20 && \
     nvm use 20 && \
     nvm alias default 20 && \
-    npm install -g @modelcontextprotocol/server-filesystem @modelcontextprotocol/server-github @modelcontextprotocol/server-postgres @playwright/mcp @modelcontextprotocol/server-memory @modelcontextprotocol/server-brave-search playwright && \
+    npm install -g yarn @modelcontextprotocol/server-filesystem @modelcontextprotocol/server-github @modelcontextprotocol/server-postgres @playwright/mcp @modelcontextprotocol/server-memory @modelcontextprotocol/server-brave-search playwright && \
     npx playwright install --with-deps chromium && \
     ln -s $(nvm which 20) /usr/local/bin/node && \
     ln -s $(dirname $(nvm which 20))/npm /usr/local/bin/npm && \
-    ln -s $(dirname $(nvm which 20))/npx /usr/local/bin/npx
+    ln -s $(dirname $(nvm which 20))/npx /usr/local/bin/npx && \
+    ln -s $(dirname $(nvm which 20))/yarn /usr/local/bin/yarn
 
 # Install SDKMAN!
 ENV SDKMAN_DIR="/root/.sdkman"
