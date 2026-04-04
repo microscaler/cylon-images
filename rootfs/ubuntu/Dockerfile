@@ -29,6 +29,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libssl-dev \
     postgresql \
     postgresql-contrib \
+    docker.io \
+    docker-compose-v2 \
     linux-image-virtual \
     udev \
     ca-certificates \
@@ -52,6 +54,10 @@ ENV RUSTUP_HOME=/usr/local/rustup \
     PATH=/usr/local/cargo/bin:$PATH
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path && \
     chmod -R a+w $RUSTUP_HOME $CARGO_HOME
+
+# Install kind
+RUN curl -Lo /usr/local/bin/kind https://kind.sigs.k8s.io/dl/v0.22.0/kind-linux-amd64 && \
+    chmod +x /usr/local/bin/kind
 
 # Install uv for extremely fast python package/MCP execution
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
