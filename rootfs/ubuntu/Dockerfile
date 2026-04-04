@@ -73,6 +73,12 @@ RUN bash -c "bash < <(curl -s -S -L https://raw.githubusercontent.com/moovweb/gv
 RUN curl -Lo /usr/local/bin/kind https://kind.sigs.k8s.io/dl/v0.22.0/kind-linux-amd64 && \
     chmod +x /usr/local/bin/kind
 
+# Pre-cache KinD Node Image to prevent 1.3GB dynamic network downloads during agent cluster creation
+RUN curl -sL "https://github.com/google/go-containerregistry/releases/latest/download/go-containerregistry_Linux_x86_64.tar.gz" | tar -xz -C /usr/local/bin crane && \
+    crane pull docker.io/kindest/node:v1.34.3 /opt/kind-node.tar && \
+    echo "[Unit]\nDescription=Pre-load KinD Docker Image\nAfter=docker.service\nRequires=docker.service\n\n[Service]\nType=oneshot\nExecStart=/usr/bin/docker load -i /opt/kind-node.tar\nExecStartPost=/usr/bin/rm -f /opt/kind-node.tar\n\n[Install]\nWantedBy=multi-user.target" > /etc/systemd/system/preload-kind.service && \
+    systemctl enable preload-kind.service
+
 # Install uv for extremely fast python package/MCP execution
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
     cp /root/.local/bin/uv /usr/local/bin/uv && \
