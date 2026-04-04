@@ -84,6 +84,13 @@ RUN bash -c "bash < <(curl -s -S -L https://raw.githubusercontent.com/moovweb/gv
 RUN curl -Lo /usr/local/bin/kind https://kind.sigs.k8s.io/dl/v0.22.0/kind-linux-${TARGETARCH:-amd64} && \
     chmod +x /usr/local/bin/kind
 
+# Install core Kubernetes operations tools (kubectl, kustomize, fluxcd)
+RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/${TARGETARCH:-amd64}/kubectl" && \
+    chmod +x kubectl && mv kubectl /usr/local/bin/kubectl && \
+    curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash && \
+    mv kustomize /usr/local/bin/kustomize && \
+    curl -s https://fluxcd.io/install.sh | bash
+
 # Pre-cache KinD Node Image to prevent 1.3GB dynamic network downloads during agent cluster creation
 RUN if [ "$TARGETARCH" = "arm64" ]; then CRANE_ARCH="arm64"; else CRANE_ARCH="x86_64"; fi && \
     curl -sL "https://github.com/google/go-containerregistry/releases/latest/download/go-containerregistry_Linux_${CRANE_ARCH}.tar.gz" | tar -xz -C /usr/local/bin crane && \
