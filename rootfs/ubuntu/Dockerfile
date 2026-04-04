@@ -89,7 +89,8 @@ RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/s
     chmod +x kubectl && mv kubectl /usr/local/bin/kubectl && \
     curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash && \
     mv kustomize /usr/local/bin/kustomize && \
-    curl -s https://fluxcd.io/install.sh | bash
+    curl -s https://fluxcd.io/install.sh | bash && \
+    curl -s https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
 # Pre-cache KinD Node Image to prevent 1.3GB dynamic network downloads during agent cluster creation
 RUN if [ "$TARGETARCH" = "arm64" ]; then CRANE_ARCH="arm64"; else CRANE_ARCH="x86_64"; fi && \
