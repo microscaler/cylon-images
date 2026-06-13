@@ -1,0 +1,116 @@
+#cloud-config
+# Resurrection node — Multipass guest that runs the Cylon host daemon and Firecracker microVMs.
+# Canonical source: cylon-images/multipass/cloud-init.yaml
+#
+# Cylon host binary: downloaded from private Tiffany GitHub Releases (built by release-binaries.yml).
+# Requires /etc/cylon/github-token (injected at build-base from GITHUB_TOKEN — see README).
+# Pin version in /etc/cylon/release-pin (default: latest).
+
+users:
+  - default
+  - name: cylon
+    groups: [sudo, kvm]
+    shell: /bin/bash
+    sudo: ["ALL=(ALL) NOPASSWD:ALL"]
+
+write_files:
+  - path: /etc/apt/apt.conf.d/99-force-ipv4
+    content: |
+      Acquire::ForceIPv4 "true";
+
+  # Pin Tiffany release tag, or "latest" for newest GitHub Release asset.
+  - path: /etc/cylon/release-pin
+    permissions: "0644"
+    owner: root:root
+    content: |
+      latest
+
+  - path: /etc/systemd/system/cylon-host.service
+    permissions: "0644"
+    owner: root:root
+    content: |
+      [Unit]
+      Description=Cylon host daemon (Firecracker hypervisor — resurrection node)
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=simple
+      User=cylon
+      Group=cylon
+      SupplementaryGroups=kvm
+      WorkingDirectory=/home/cylon
+      EnvironmentFile=-/etc/cylon/host.env
+      ExecStart=/usr/local/bin/cylon
+      Restart=always
+      RestartSec=5
+      StandardOutput=journal
+      StandardError=journal
+      SyslogIdentifier=cylon-host
+
+      [Install]
+      WantedBy=multi-user.target
+
+  - path: /usr/local/sbin/install-cylon-from-release
+    permissions: "0755"
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      REPO="microscaler/tiffany"
+      TOKEN_FILE="/etc/cylon/github-token"
+      if [ ! -f "${TOKEN_FILE}" ]; then
+        echo "Missing ${TOKEN_FILE} — inject GITHUB_TOKEN at cloud-init time (see cylon-images/multipass/README.md)" >&2
+        exit 1
+      fi
+      GITHUB_TOKEN="$(tr -d '[:space:]' < "${TOKEN_FILE}")"
+      if [ -z "${GITHUB_TOKEN}" ]; then
+        echo "Empty ${TOKEN_FILE}" >&2
+        exit 1
+      fi
+      AUTH=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
+      API=(-H "Accept: application/vnd.github+json")
+      PIN="$(tr -d '[:space:]' < /etc/cylon/release-pin)"
+      if [ -z "${PIN}" ]; then
+        PIN="latest"
+      fi
+      if [ "${PIN}" = "latest" ]; then
+        RELEASE_URL="https://api.github.com/repos/${REPO}/releases/latest"
+      else
+        RELEASE_URL="https://api.github.com/repos/${REPO}/releases/tags/${PIN}"
+      fi
+      RELEASE_JSON="$(curl -fsSL "${AUTH[@]}" "${API[@]}" "${RELEASE_URL}")"
+      BINARY_URL="$(echo "${RELEASE_JSON}" | jq -r '.assets[] | select(.name=="cylon-linux-x86_64") | .url')"
+      SHA_URL="$(echo "${RELEASE_JSON}" | jq -r '.assets[] | select(.name=="cylon-linux-x86_64.sha256") | .url')"
+      if [ -z "${BINARY_URL}" ] || [ "${BINARY_URL}" = "null" ]; then
+        echo "Release asset cylon-linux-x86_64 not found (${PIN})" >&2
+        exit 1
+      fi
+      TMP="$(mktemp)"
+      curl -fsSL "${AUTH[@]}" -H "Accept: application/octet-stream" -L -o "${TMP}" "${BINARY_URL}"
+      curl -fsSL "${AUTH[@]}" -H "Accept: application/octet-stream" -L -o "${TMP}.sha256" "${SHA_URL}"
+      expected_hash="$(awk '{print $1}' "${TMP}.sha256")"
+      actual_hash="$(sha256sum "${TMP}" | awk '{print $1}')"
+      if [ "${expected_hash}" != "${actual_hash}" ]; then
+        echo "Checksum mismatch for cylon-linux-x86_64" >&2
+        exit 1
+      fi
+      install -o root -g root -m 0755 "${TMP}" /usr/local/bin/cylon
+      rm -f "${TMP}" "${TMP}.sha256"
+
+runcmd:
+  - export DEBIAN_FRONTEND=noninteractive
+  - apt-get update
+  - apt-get install -y qemu-kvm cpu-checker acl curl jq iproute2 ca-certificates libssl3
+  - setfacl -m u:cylon:rw /dev/kvm
+  - curl -fsSL -o /tmp/firecracker.tgz "https://github.com/firecracker-microvm/firecracker/releases/download/v1.10.1/firecracker-v1.10.1-x86_64.tgz"
+  - tar -xzf /tmp/firecracker.tgz -C /tmp
+  - install -m 0755 /tmp/release-v1.10.1-x86_64/firecracker-v1.10.1-x86_64 /usr/bin/firecracker
+  - install -m 0755 /tmp/release-v1.10.1-x86_64/jailer-v1.10.1-x86_64 /usr/bin/jailer
+  - rm -rf /tmp/firecracker.tgz /tmp/release-v1.10.1-x86_64
+  - mkdir -p /home/cylon/cylon-images
+  - curl -fsSL -o /home/cylon/cylon-images/vmlinux "https://s3.amazonaws.com/spec.ccfc.min/img/quickstart_guide/x86_64/kernels/vmlinux.bin"
+  - chown -R cylon:cylon /home/cylon/cylon-images
+  - /usr/local/sbin/install-cylon-from-release
+  - systemctl daemon-reload
+  - systemctl enable cylon-host.service

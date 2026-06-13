@@ -1,0 +1,8 @@
+#cloud-config
+# Merged by `just render-cloud-init` — PLACEHOLDER replaced with base64-encoded token.
+write_files:
+  - path: /etc/cylon/github-token
+    permissions: "0600"
+    owner: root:root
+    encoding: b64
+    content: PLACEHOLDER

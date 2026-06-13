@@ -18,6 +18,13 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
+      - name: Checkout cylon-skills for rootfs bake
+        uses: actions/checkout@v4
+        with:
+          repository: microscaler/cylon-skills
+          path: cylon-skills
+      - name: Stage skills into rootfs build context
+        run: cp -r cylon-skills rootfs/ubuntu/cylon-skills-registry
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
       - name: Set up Docker Buildx
@@ -38,6 +45,13 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v4
+      - name: Checkout cylon-skills for rootfs bake
+        uses: actions/checkout@v4
+        with:
+          repository: microscaler/cylon-skills
+          path: cylon-skills
+      - name: Stage skills into rootfs build context
+        run: cp -r cylon-skills rootfs/ubuntu/cylon-skills-registry
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
       - name: Set up Docker Buildx

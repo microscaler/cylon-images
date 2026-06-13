@@ -1,1 +1,4 @@
 artifacts/
+.env
+multipass/cloud-init.merged.yaml
+multipass/cloud-init.github-token.patch.yaml

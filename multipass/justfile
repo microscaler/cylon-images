@@ -1,0 +1,105 @@
+# Resurrection-node Multipass base image (ms02 / any nested-KVM host).
+#
+# Strategy:
+#   1. build-base  — launch + cloud-init → stopped `resurrection-node-base`
+#   2. clone-node  — fast rollout of `resurrection-node-N` from the base disk
+#
+# cloud-init.yaml is the portable artifact in git; the base instance is the local
+# clone source (Multipass has no cross-host image registry yet).
+
+set shell := ["bash", "-uc"]
+
+default:
+    @just --list
+
+base_name := "resurrection-node-base"
+ubuntu := "24.04"
+cloud_init := justfile_directory() + "/cloud-init.yaml"
+cloud_init_merged := env_var("HOME") + "/resurrection-node-cloud-init.yaml"
+node_cpus := "6"
+node_memory := "16G"
+node_disk := "40G"
+
+# Merge git-tracked cloud-init with GITHUB_TOKEN (private release download).
+# Token sources (first match): $GITHUB_TOKEN, ../../tiffany/.env, ../.env, cloud-init.github-token.patch.yaml
+render-cloud-init:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -z "$${GITHUB_TOKEN:-}" ]; then
+      for env_file in "../../tiffany/.env" "../.env"; do
+        if [ -f "$${env_file}" ]; then
+          set -a
+          # shellcheck disable=SC1091
+          source "$${env_file}"
+          set +a
+          break
+        fi
+      done
+    fi
+    patch="$$(mktemp)"
+    secret="$${patch}.secret"
+    trap 'rm -f "$${patch}" "$${secret}"' EXIT
+    if [ -n "$${GITHUB_TOKEN:-}" ]; then
+      printf '%s\n' "$${GITHUB_TOKEN}" > "$${secret}"
+      cp "{{justfile_directory()}}/cloud-init.github-token.patch.template.yaml" "$${patch}"
+      b64="$$(base64 -w0 < "$${secret}")"
+      sed --in-place "s|PLACEHOLDER|$${b64}|" "$${patch}"
+    elif [ -f "{{justfile_directory()}}/cloud-init.github-token.patch.yaml" ]; then
+      cp "{{justfile_directory()}}/cloud-init.github-token.patch.yaml" "$${patch}"
+    else
+      echo "GITHUB_TOKEN required (export, ../../tiffany/.env, ../.env, or cloud-init.github-token.patch.yaml)" >&2
+      echo "See cloud-init.github-token.patch.yaml.example" >&2
+      exit 1
+    fi
+    python3 "{{justfile_directory()}}/merge_cloud_init.py" "{{cloud_init}}" "$${patch}" "{{cloud_init_merged}}"
+    chmod 600 "{{cloud_init_merged}}"
+    echo "Rendered {{cloud_init_merged}} (mode 600 — contains token; delete after build-base if desired)"
+
+# Launch and provision the stopped base instance (idempotent if base already exists).
+build-base: render-cloud-init
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if multipass info "{{base_name}}" &>/dev/null; then
+        echo "{{base_name}} already exists — delete with 'just purge-base' to rebuild."
+        multipass info "{{base_name}}"
+        exit 0
+    fi
+    echo "Building {{base_name}} from {{cloud_init_merged}} ..."
+    multipass launch "{{ubuntu}}" \
+        --name "{{base_name}}" \
+        --cpus {{node_cpus}} --memory {{node_memory}} --disk {{node_disk}} \
+        --cloud-init "{{cloud_init_merged}}"
+    echo "Waiting for cloud-init..."
+    multipass exec "{{base_name}}" -- cloud-init status --wait
+    multipass exec "{{base_name}}" -- bash -lc 'test -c /dev/kvm && firecracker --version && test -x /usr/local/bin/cylon'
+    multipass stop "{{base_name}}"
+    echo "{{base_name}} ready (stopped). Clone workers with: just clone-node 1"
+
+# Remove the base instance (does not touch resurrection-node-N workers).
+purge-base:
+    multipass delete "{{base_name}}" --purge 2>/dev/null || true
+
+# Clone resurrection-node-N from the base (N=1|2|3|…).
+clone-node N:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    name="resurrection-node-{{N}}"
+    if multipass info "$${name}" &>/dev/null; then
+        echo "$${name} already exists."
+        exit 0
+    fi
+    if ! multipass info "{{base_name}}" &>/dev/null; then
+        echo "Run 'just build-base' first."
+        exit 1
+    fi
+    state=$$(multipass info "{{base_name}}" | awk '/State/ {print $$2}')
+    if [[ "$${state}" != "Stopped" ]]; then
+        multipass stop "{{base_name}}"
+    fi
+    multipass clone "{{base_name}}" -n "$${name}"
+    multipass start "$${name}"
+    echo "Cloned $${name} — mount workspaces via cylon-local-infra just resurrection-nodes-up."
+
+# Status of base + worker nodes.
+status:
+    multipass list

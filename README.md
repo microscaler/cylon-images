@@ -11,6 +11,7 @@ This repository contains the build process and artifacts for generating custom F
 
 * `/kernel` - Contains the Linux Kernel build definition (compiles `vmlinux`).
 * `/rootfs` - Contains the base Operating System user-space (`ext4` rootfs via OCI builds).
+* `/multipass` - Resurrection-node Multipass guest image (`cloud-init.yaml` + `just build-base` / clone roll-out on ms02).
 
 > **Note**:
 > Kernel source: https://github.com/firecracker-microvm/firecracker/tree/main/resources/guest_configs
