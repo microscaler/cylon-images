@@ -145,6 +145,11 @@ RUN curl -fsSL https://raw.githubusercontent.com/tilt-dev/tilt/master/scripts/in
 # Install Just command runner
 RUN curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /usr/local/bin
 
+# Baseline cylon-skills registry for FAR guest preprompt assembly (ADR-0036 phase 3b).
+# Build context must include ../cylon-skills (see cylon-images CI / just build-rootfs).
+COPY cylon-skills-registry /opt/cylon/skills
+ENV CYLON_SKILLS_ROOT=/opt/cylon/skills
+
 # Fix SSH environment loading and locale defaults
 RUN sed -i -e 's/^AcceptEnv LANG LC_\*$/#AcceptEnv LANG LC_*/' /etc/ssh/sshd_config
 

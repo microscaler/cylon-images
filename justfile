@@ -13,5 +13,7 @@ build-kernel:
 
 # Build the Ubuntu Rootfs OCI image used by Cylon to create ext4 overlays
 build-rootfs version="latest":
+	rm -rf rootfs/ubuntu/cylon-skills-registry
+	cp -r ../cylon-skills rootfs/ubuntu/cylon-skills-registry
 	docker build -t cylon-rootfs-ubuntu:{{version}} rootfs/ubuntu/
 	@echo "OCI Rootfs image cylon-rootfs-ubuntu:{{version}} compiled successfully"
