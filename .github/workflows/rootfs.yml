@@ -3,36 +3,48 @@ name: Rootfs CI
 on:
   pull_request:
     paths:
-      - 'rootfs/**'
+      - 'container/rootfs/**'
+      - '.github/workflows/rootfs.yml'
     branches: [main]
   push:
     paths:
-      - 'rootfs/**'
+      - 'container/rootfs/**'
+      - '.github/workflows/rootfs.yml'
     branches: [main]
+
+permissions:
+  contents: read
+  packages: write
 
 jobs:
   build-rootfs:
     if: github.event_name != 'push'
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     steps:
       - uses: actions/checkout@v4
-      - name: Checkout cylon-skills for rootfs bake
+
+      - name: Checkout cylon-skills into rootfs build context
         uses: actions/checkout@v4
         with:
           repository: microscaler/cylon-skills
-          path: cylon-skills
-      - name: Stage skills into rootfs build context
-        run: cp -r cylon-skills rootfs/ubuntu/cylon-skills-registry
+          path: container/rootfs/ubuntu/cylon-skills-registry
+
+      - name: Verify skills registry is present
+        run: |
+          test -d container/rootfs/ubuntu/cylon-skills-registry
+          test "$(find container/rootfs/ubuntu/cylon-skills-registry -type f | head -1)" != ""
+          echo "cylon-skills-registry file count: $(find container/rootfs/ubuntu/cylon-skills-registry -type f | wc -l)"
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
       - name: Build rootfs image
         uses: docker/build-push-action@v5
         with:
-          context: ./rootfs/ubuntu
+          context: ./container/rootfs/ubuntu
           platforms: linux/amd64,linux/arm64
           push: false
           tags: ghcr.io/${{ github.repository_owner }}/cylon-rootfs-ubuntu:latest
@@ -40,32 +52,38 @@ jobs:
   release-rootfs:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
     steps:
       - uses: actions/checkout@v4
-      - name: Checkout cylon-skills for rootfs bake
+
+      - name: Checkout cylon-skills into rootfs build context
         uses: actions/checkout@v4
         with:
           repository: microscaler/cylon-skills
-          path: cylon-skills
-      - name: Stage skills into rootfs build context
-        run: cp -r cylon-skills rootfs/ubuntu/cylon-skills-registry
+          path: container/rootfs/ubuntu/cylon-skills-registry
+
+      - name: Verify skills registry is present
+        run: |
+          test -d container/rootfs/ubuntu/cylon-skills-registry
+          test "$(find container/rootfs/ubuntu/cylon-skills-registry -type f | head -1)" != ""
+          echo "cylon-skills-registry file count: $(find container/rootfs/ubuntu/cylon-skills-registry -type f | wc -l)"
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Build and push rootfs
         uses: docker/build-push-action@v5
         with:
-          context: ./rootfs/ubuntu
+          context: ./container/rootfs/ubuntu
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/cylon-rootfs-ubuntu:latest

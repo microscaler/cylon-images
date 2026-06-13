@@ -1,0 +1,63 @@
+# Firecracker microVM container artifacts — kernel, rootfs OCI images, local registry push.
+
+container_dir := justfile_directory()
+
+dev_registry := "kind-registry"
+dev_registry_port := "5001"
+dev_registry_host := env_var_or_default("MS02_LAN_IP", "192.168.1.189")
+
+# Bind local registry on all interfaces so resurrection nodes can pull OCI layers.
+expose-dev-registry:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	docker rm -f {{dev_registry}} 2>/dev/null || true
+	docker run -d --restart=always \
+		-p "0.0.0.0:{{dev_registry_port}}:5000" \
+		--name {{dev_registry}} registry:2
+	echo "Dev registry: {{dev_registry_host}}:{{dev_registry_port}}"
+
+# One-time ms02 host setup: allow plain-HTTP pushes/pulls to the dev registry.
+configure-docker-insecure-registries:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	sudo python3 "{{container_dir}}/configure-docker-insecure-registries.py"
+	sudo systemctl restart docker
+	echo "Docker restarted with insecure-registries for :5001"
+
+# Build the Linux kernel (vmlinux). Exports to container/artifacts/
+build-kernel:
+	mkdir -p {{container_dir}}/artifacts
+	DOCKER_BUILDKIT=1 docker build \
+		--file {{container_dir}}/kernel/Dockerfile \
+		--output type=local,dest={{container_dir}}/artifacts \
+		{{container_dir}}/kernel/
+	@echo "Kernel exported to container/artifacts/vmlinux"
+
+# Fast minimal rootfs for Firecracker boot smoke (seconds, not hours).
+build-rootfs-minimal tag="dev":
+	docker build -t cylon-rootfs-minimal:{{tag}} {{container_dir}}/rootfs/minimal/
+	@echo "Built cylon-rootfs-minimal:{{tag}}"
+
+# Push minimal rootfs to ms02 dev registry (resurrection nodes pull from MS02_LAN_IP:5001).
+push-rootfs-minimal tag="dev": configure-docker-insecure-registries expose-dev-registry build-rootfs-minimal
+	docker tag cylon-rootfs-minimal:{{tag}} {{dev_registry_host}}:{{dev_registry_port}}/cylon-rootfs-minimal:{{tag}}
+	docker push {{dev_registry_host}}:{{dev_registry_port}}/cylon-rootfs-minimal:{{tag}}
+	@echo "Pushed {{dev_registry_host}}:{{dev_registry_port}}/cylon-rootfs-minimal:{{tag}}"
+
+# Copy Firecracker kernel to resurrection-node-1 (quick path before full kernel roll-out).
+stage-kernel-node-1:
+	multipass transfer {{container_dir}}/artifacts/vmlinux resurrection-node-1:/tmp/vmlinux
+	multipass exec resurrection-node-1 -- sudo install -o cylon -g cylon -m 644 /tmp/vmlinux /home/cylon/cylon-images/vmlinux
+
+# Build the Ubuntu Rootfs OCI image used by Cylon to create ext4 overlays
+build-rootfs version="latest":
+	rm -rf {{container_dir}}/rootfs/ubuntu/cylon-skills-registry
+	cp -r ../../cylon-skills {{container_dir}}/rootfs/ubuntu/cylon-skills-registry
+	docker build -t cylon-rootfs-ubuntu:{{version}} {{container_dir}}/rootfs/ubuntu/
+	@echo "OCI Rootfs image cylon-rootfs-ubuntu:{{version}} compiled successfully"
+
+# Push full ubuntu rootfs to dev registry
+push-rootfs-ubuntu version="latest": configure-docker-insecure-registries expose-dev-registry build-rootfs
+	docker tag cylon-rootfs-ubuntu:{{version}} {{dev_registry_host}}:{{dev_registry_port}}/cylon-rootfs-ubuntu:{{version}}
+	docker push {{dev_registry_host}}:{{dev_registry_port}}/cylon-rootfs-ubuntu:{{version}}
+	@echo "Pushed {{dev_registry_host}}:{{dev_registry_port}}/cylon-rootfs-ubuntu:{{version}}"

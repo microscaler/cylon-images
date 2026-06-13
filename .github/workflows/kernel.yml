@@ -3,19 +3,23 @@ name: Kernel CI
 on:
   pull_request:
     paths:
-      - 'kernel/**'
+      - 'container/kernel/**'
+      - '.github/workflows/kernel.yml'
     branches: [main]
   push:
     paths:
-      - 'kernel/**'
+      - 'container/kernel/**'
+      - '.github/workflows/kernel.yml'
     branches: [main]
+
+permissions:
+  contents: read
+  packages: write
 
 jobs:
   build-kernel:
     if: github.event_name != 'push'
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     steps:
       - uses: actions/checkout@v4
       - name: Set up QEMU
@@ -25,8 +29,8 @@ jobs:
       - name: Build kernel image
         uses: docker/build-push-action@v5
         with:
-          context: ./kernel
-          file: ./kernel/Dockerfile
+          context: ./container/kernel
+          file: ./container/kernel/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: false
           tags: ghcr.io/${{ github.repository_owner }}/cylon-kernel:6.1.102
@@ -34,9 +38,6 @@ jobs:
   release-kernel:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
     steps:
       - uses: actions/checkout@v4
       - name: Set up QEMU
@@ -52,8 +53,8 @@ jobs:
       - name: Build and push kernel
         uses: docker/build-push-action@v5
         with:
-          context: ./kernel
-          file: ./kernel/Dockerfile
+          context: ./container/kernel
+          file: ./container/kernel/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/cylon-kernel:6.1.102

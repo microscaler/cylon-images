@@ -4,37 +4,42 @@
   <p><em>By your command.</em></p>
 </div>
 
+This repository builds artifacts for the Cylon Resurrection Platform in two layers:
 
-This repository contains the build process and artifacts for generating custom Firecracker MicroVM images.
+| Directory | Target | Output |
+|---|---|---|
+| [`container/`](container/) | Firecracker **microVM** guest | `vmlinux`, OCI rootfs → GHCR |
+| [`multipass/`](multipass/) | **Resurrection-node** host OS | Multipass cloud-init + clones |
 
-## Structure
+> **Kernel note:** Firecracker guest configs — [firecracker guest_configs](https://github.com/firecracker-microvm/firecracker/tree/main/resources/guest_configs)
 
-* `/kernel` - Contains the Linux Kernel build definition (compiles `vmlinux`).
-* `/rootfs` - Contains the base Operating System user-space (`ext4` rootfs via OCI builds).
-* `/multipass` - Resurrection-node Multipass guest image (`cloud-init.yaml` + `just build-base` / clone roll-out on ms02).
-
-> **Note**:
-> Kernel source: https://github.com/firecracker-microvm/firecracker/tree/main/resources/guest_configs
-> Only Firecracker customized kernel configs will work with cylon stack.
-
-## Building 
-
-Use `just` to build the components locally:
+## Quick start
 
 ```bash
-# Build the Linux kernel extraction 
-just build-kernel
+# Repo root — all recipes via import
+just --list
 
-# Build the base VM Rootfs 
-just build-rootfs
+# MicroVM container artifacts
+just build-kernel
+just build-rootfs          # needs sibling ../cylon-skills
+just push-rootfs-minimal   # ms02 dev registry
+
+# Multipass resurrection nodes
+just build-base
+just clone-node 1
 ```
 
-> **Note**: Official distributions of the VM images are automatically pushed to GitHub Container Registry (GHCR) as OCI artifacts.
+## CI
+
+| Workflow | Path filter | Publishes |
+|---|---|---|
+| [`kernel.yml`](.github/workflows/kernel.yml) | `container/kernel/**` | `ghcr.io/.../cylon-kernel:6.1.102` |
+| [`rootfs.yml`](.github/workflows/rootfs.yml) | `container/rootfs/**` | `ghcr.io/.../cylon-rootfs-ubuntu:latest` |
+
+Rootfs CI checks out `microscaler/cylon-skills` into `container/rootfs/ubuntu/cylon-skills-registry` before `docker build`.
 
 ## The Thirteen Personalities
 
 > *There are many copies. And they have a plan.*
 
-While these images provide the raw, secure computational vessel, a node is only fully realized upon synchronization. Built to accommodate 13 distinct operational identities—each harboring its own unique behavioral profile and resource needs—this foundation guarantees strict hardware-level isolation. It provides each distinct runtime "personality" the pristine, ephemeral environment required to execute its designated intent, free from host contamination or cross-talk.
-
-Each model fulfills a purpose. 
+The full Ubuntu rootfs (`container/rootfs/ubuntu/`) bakes the cylon-skills registry for 13 operational identities. See [`container/rootfs/ubuntu/Dockerfile`](container/rootfs/ubuntu/Dockerfile).

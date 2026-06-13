@@ -6,7 +6,7 @@
 |---|---|---|
 | **Platform `cylon-daemon`** | Kind on ms02 | Portal / hub integration |
 | **Resurrection node** | Multipass on ms02 | Host daemon + Firecracker VMM for agent microVMs |
-| **FAR guest rootfs** | `rootfs/ubuntu/` in this repo | OCI image inside each microVM |
+| **FAR guest rootfs** | [`container/rootfs/`](../container/rootfs/) | OCI image inside each microVM |
 
 ## Binary supply chain
 

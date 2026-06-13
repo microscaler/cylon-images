@@ -146,7 +146,8 @@ RUN curl -fsSL https://raw.githubusercontent.com/tilt-dev/tilt/master/scripts/in
 RUN curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /usr/local/bin
 
 # Baseline cylon-skills registry for FAR guest preprompt assembly (ADR-0036 phase 3b).
-# Build context must include ../cylon-skills (see cylon-images CI / just build-rootfs).
+# CI: actions/checkout → container/rootfs/ubuntu/cylon-skills-registry
+# Local: `just build-rootfs` (from repo root) copies ../../cylon-skills before docker build.
 COPY cylon-skills-registry /opt/cylon/skills
 ENV CYLON_SKILLS_ROOT=/opt/cylon/skills
 

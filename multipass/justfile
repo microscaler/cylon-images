@@ -7,11 +7,6 @@
 # cloud-init.yaml is the portable artifact in git; the base instance is the local
 # clone source (Multipass has no cross-host image registry yet).
 
-set shell := ["bash", "-uc"]
-
-default:
-    @just --list
-
 base_name := "resurrection-node-base"
 ubuntu := "24.04"
 cloud_init := justfile_directory() + "/cloud-init.yaml"

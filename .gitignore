@@ -1,4 +1,8 @@
-artifacts/
 .env
+artifacts/
+container/artifacts/
+container/rootfs/ubuntu/cylon-skills-registry/
 multipass/cloud-init.merged.yaml
 multipass/cloud-init.github-token.patch.yaml
+._*
+**/._*
