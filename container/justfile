@@ -51,8 +51,9 @@ push-rootfs-minimal tag="dev": configure-docker-insecure-registries expose-dev-r
 act-push-rootfs-minimal tag="dev":
 	#!/usr/bin/env bash
 	set -euo pipefail
-	root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+	root="{{justfile_directory()}}/.."
 	microscaler="$(cd "${root}/.." && pwd)"
+	cd "${root}"
 	command -v act >/dev/null || { echo "install act: see container/README.md"; exit 1; }
 	act workflow_dispatch \
 	  -W "${root}/.github/workflows/rootfs-minimal.yml" \
@@ -60,7 +61,7 @@ act-push-rootfs-minimal tag="dev":
 	  --bind \
 	  --container-architecture linux/amd64 \
 	  -P ubuntu-latest=catthehacker/ubuntu:act-latest \
-	  --container-options "-v /var/run/docker.sock:/var/run/docker.sock -v ${microscaler}/cylon:/cylon -v ${microscaler}/cylon-skills:/cylon-skills" \
+	  --container-options "-v ${microscaler}/cylon:/cylon -v ${microscaler}/cylon-skills:/cylon-skills" \
 	  --env ACT_CYLON_PATH=/cylon \
 	  --env ACT_SKILLS_PATH=/cylon-skills \
 	  --env MS02_LAN_IP={{dev_registry_host}}
