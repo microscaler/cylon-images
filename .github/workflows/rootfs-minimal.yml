@@ -1,0 +1,49 @@
+name: Minimal Rootfs (FAR guest)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'container/rootfs/minimal/**'
+      - '.github/workflows/rootfs-minimal.yml'
+    branches: [main]
+
+jobs:
+  push-minimal-dev:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout cylon-images
+        uses: actions/checkout@v4
+
+      - name: Install Rust (FAR guest binaries)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build FAR guest bins from sibling cylon checkout
+        run: |
+          set -euo pipefail
+          CYLON_PATH="${ACT_CYLON_PATH:-${GITHUB_WORKSPACE}/../cylon}"
+          SKILLS_PATH="${ACT_SKILLS_PATH:-${GITHUB_WORKSPACE}/../cylon-skills}"
+          test -d "${CYLON_PATH}/crates/far-guest"
+          test -d "${SKILLS_PATH}"
+          cd "${CYLON_PATH}"
+          cargo build --release -p far-guest --bins
+          bin_dir="${GITHUB_WORKSPACE}/container/rootfs/minimal/tools/bin"
+          mkdir -p "${bin_dir}"
+          cp target/release/vsock-hello target/release/cylon-guest-brain "${bin_dir}/"
+          chmod +x "${bin_dir}/"*
+          rm -rf "${GITHUB_WORKSPACE}/container/rootfs/minimal/tools/cylon-skills-registry"
+          cp -a "${SKILLS_PATH}" "${GITHUB_WORKSPACE}/container/rootfs/minimal/tools/cylon-skills-registry"
+          ls -la "${bin_dir}"
+
+      - name: Build and push to ms02 dev registry (:5001)
+        env:
+          MS02_LAN_IP: ${{ vars.MS02_LAN_IP || '192.168.1.189' }}
+        run: |
+          set -euo pipefail
+          cd container
+          docker rm -f kind-registry 2>/dev/null || true
+          docker run -d --restart=always -p "0.0.0.0:5001:5000" --name kind-registry registry:2 || true
+          just build-rootfs-minimal dev
+          docker tag cylon-rootfs-minimal:dev "${MS02_LAN_IP}:5001/cylon-rootfs-minimal:dev"
+          docker push "${MS02_LAN_IP}:5001/cylon-rootfs-minimal:dev"
+          echo "Pushed ${MS02_LAN_IP}:5001/cylon-rootfs-minimal:dev"

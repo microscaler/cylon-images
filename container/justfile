@@ -6,6 +6,9 @@ dev_registry := "kind-registry"
 dev_registry_port := "5001"
 dev_registry_host := env_var_or_default("MS02_LAN_IP", "192.168.1.189")
 
+ghcr_kernel := "ghcr.io/microscaler/cylon-kernel:6.1.102"
+ghcr_rootfs_ubuntu := "ghcr.io/microscaler/cylon-rootfs-ubuntu:latest"
+
 # Bind local registry on all interfaces so resurrection nodes can pull OCI layers.
 expose-dev-registry:
 	#!/usr/bin/env bash
@@ -44,7 +47,48 @@ push-rootfs-minimal tag="dev": configure-docker-insecure-registries expose-dev-r
 	docker push {{dev_registry_host}}:{{dev_registry_port}}/cylon-rootfs-minimal:{{tag}}
 	@echo "Pushed {{dev_registry_host}}:{{dev_registry_port}}/cylon-rootfs-minimal:{{tag}}"
 
-# Copy Firecracker kernel to resurrection-node-1 (quick path before full kernel roll-out).
+# Local CI parity: build + push via nektos/act (ms02). Mounts sibling cylon + cylon-skills.
+act-push-rootfs-minimal tag="dev":
+	#!/usr/bin/env bash
+	set -euo pipefail
+	root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+	microscaler="$(cd "${root}/.." && pwd)"
+	command -v act >/dev/null || { echo "install act: see container/README.md"; exit 1; }
+	act workflow_dispatch \
+	  -W "${root}/.github/workflows/rootfs-minimal.yml" \
+	  -j push-minimal-dev \
+	  --bind \
+	  --container-architecture linux/amd64 \
+	  -P ubuntu-latest=catthehacker/ubuntu:act-latest \
+	  --container-options "-v /var/run/docker.sock:/var/run/docker.sock -v ${microscaler}/cylon:/cylon -v ${microscaler}/cylon-skills:/cylon-skills" \
+	  --env ACT_CYLON_PATH=/cylon \
+	  --env ACT_SKILLS_PATH=/cylon-skills \
+	  --env MS02_LAN_IP={{dev_registry_host}}
+
+# Pull published kernel from GHCR and extract vmlinux to container/artifacts/
+pull-kernel-from-ghcr:
+	#!/usr/bin/env bash
+	set -euo pipefail
+	docker pull {{ghcr_kernel}}
+	mkdir -p {{container_dir}}/artifacts
+	cid="$(docker create {{ghcr_kernel}})"
+	docker cp "${cid}:/vmlinux" {{container_dir}}/artifacts/vmlinux
+	docker rm "${cid}"
+	echo "Extracted vmlinux to container/artifacts/vmlinux"
+
+pull-rootfs-ubuntu-from-ghcr:
+	docker pull {{ghcr_rootfs_ubuntu}}
+	@echo "Pulled {{ghcr_rootfs_ubuntu}}"
+
+# Stage GHCR kernel on resurrection-node-N (N=1|2|3).
+stage-kernel-from-ghcr node="1": pull-kernel-from-ghcr
+	multipass transfer {{container_dir}}/artifacts/vmlinux resurrection-node-{{node}}:/tmp/vmlinux
+	multipass exec resurrection-node-{{node}} -- sudo install -o cylon -g cylon -m 644 /tmp/vmlinux /home/cylon/cylon-images/vmlinux
+	@echo "Installed GHCR kernel on resurrection-node-{{node}}"
+
+stage-kernel-from-ghcr-all: (stage-kernel-from-ghcr "1") (stage-kernel-from-ghcr "2") (stage-kernel-from-ghcr "3")
+
+# Copy locally built kernel to resurrection-node-1 (offline / CI artifact path).
 stage-kernel-node-1:
 	multipass transfer {{container_dir}}/artifacts/vmlinux resurrection-node-1:/tmp/vmlinux
 	multipass exec resurrection-node-1 -- sudo install -o cylon -g cylon -m 644 /tmp/vmlinux /home/cylon/cylon-images/vmlinux

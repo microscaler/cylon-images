@@ -1,0 +1,15 @@
+[Unit]
+Description=Cylon guest brain stub (FAR microVM)
+After=vsock-hello.service
+Wants=vsock-hello.service
+
+[Service]
+Type=simple
+Environment=CYLON_SKILLS_ROOT=/opt/cylon/skills
+Environment=RUST_LOG=info
+ExecStart=/usr/local/bin/cylon-guest-brain
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

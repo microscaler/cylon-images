@@ -2,6 +2,10 @@
 artifacts/
 container/artifacts/
 container/rootfs/ubuntu/cylon-skills-registry/
+container/rootfs/minimal/tools/bin/*
+!container/rootfs/minimal/tools/bin/.gitkeep
+container/rootfs/minimal/tools/cylon-skills-registry/*
+!container/rootfs/minimal/tools/cylon-skills-registry/.gitkeep
 multipass/cloud-init.merged.yaml
 multipass/cloud-init.github-token.patch.yaml
 ._*

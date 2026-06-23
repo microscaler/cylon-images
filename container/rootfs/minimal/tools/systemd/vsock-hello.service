@@ -1,0 +1,12 @@
+[Unit]
+Description=FAR vsock hello (Phase 4.5 smoke)
+After=multi-user.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/vsock-hello
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
