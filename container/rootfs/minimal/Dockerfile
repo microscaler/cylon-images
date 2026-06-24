@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Marker consumed by cylon host boot-arg selection.
 RUN mkdir -p /etc/cylon && echo "minimal" > /etc/cylon/rootfs-flavor
 
-# FAR guest binaries (built via `just stage-far-guest-rootfs` in cylon repo).
+# FAR guest binaries (built via `just far-guest-stage-rootfs` in cylon repo).
 COPY tools/bin/ /usr/local/bin/
 RUN chmod +x /usr/local/bin/* 2>/dev/null || true
 

@@ -1,7 +1,7 @@
 [Unit]
-Description=Cylon guest brain stub (FAR microVM)
-After=vsock-hello.service
-Wants=vsock-hello.service
+Description=Cylon guest daemon (FAR microVM — vsock /health on 9876)
+After=network-online.target vsock-hello.service
+Wants=network-online.target
 
 [Service]
 Type=simple
