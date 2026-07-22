@@ -10,6 +10,7 @@ This repository builds artifacts for the Cylon Resurrection Platform in two laye
 |---|---|---|
 | [`container/`](container/) | Firecracker **microVM** guest | `vmlinux`, OCI rootfs → GHCR |
 | [`multipass/`](multipass/) | **Resurrection-node** host OS | Multipass cloud-init + clones |
+| [`multipass-gha-runner/`](multipass-gha-runner/) | ~~Org GHA runner~~ **DEPRECATED** | Use ARC in `shared-gitops-k8s-cluster` (`docs/gha-arc.md`) |
 
 > **Kernel note:** Firecracker guest configs — [firecracker guest_configs](https://github.com/firecracker-microvm/firecracker/tree/main/resources/guest_configs)
 

@@ -1,0 +1,149 @@
+#cloud-config
+# GitHub Actions org self-hosted runner (microscaler) — Multipass guest on ms02.
+# Canonical source: cylon-images/multipass-gha-runner/cloud-init.yaml
+#
+# Registration token is NOT embedded here (expires ~1h). After launch:
+#   just register
+# which writes /etc/gha-runner/registration-token and runs gha-runner-register.
+
+package_update: true
+package_upgrade: true
+
+packages:
+  # Base / Docker
+  - apt-transport-https
+  - ca-certificates
+  - curl
+  - git
+  - gnupg
+  - jq
+  - lsb-release
+  - docker.io
+  - docker-compose-v2
+  - uidmap
+  # CI toolchain (Rust/Python jobs on self-hosted runner)
+  - build-essential
+  - pkg-config
+  - libssl-dev
+  - python3-pip
+  - python3-venv
+  - uuid-runtime
+  - mold
+
+users:
+  - default
+  - name: runner
+    groups: [sudo, docker]
+    shell: /bin/bash
+    sudo: ["ALL=(ALL) NOPASSWD:ALL"]
+    lock_passwd: true
+
+write_files:
+  - path: /etc/apt/apt.conf.d/99-force-ipv4
+    content: |
+      Acquire::ForceIPv4 "true";
+
+  - path: /etc/gha-runner/README
+    permissions: "0644"
+    owner: root:root
+    content: |
+      Place a short-lived org registration token at:
+        /etc/gha-runner/registration-token
+      then run:
+        sudo /usr/local/sbin/gha-runner-register
+      Prefer: just register  (from cylon-images/multipass-gha-runner on the host)
+
+  - path: /usr/local/sbin/gha-runner-register
+    permissions: "0755"
+    owner: root:root
+    content: |
+      #!/bin/bash
+      # Configure + install GitHub Actions runner systemd service (org-scoped).
+      set -euo pipefail
+
+      ORG_URL="${GHA_ORG_URL:-https://github.com/microscaler}"
+      RUNNER_NAME="${GHA_RUNNER_NAME:-gha-runner-1}"
+      RUNNER_LABELS="${GHA_RUNNER_LABELS:-microscaler,ms02}"
+      RUNNER_DIR="${GHA_RUNNER_DIR:-/opt/actions-runner}"
+      TOKEN_FILE="${GHA_TOKEN_FILE:-/etc/gha-runner/registration-token}"
+
+      if [[ ! -f "${TOKEN_FILE}" ]]; then
+        echo "missing ${TOKEN_FILE}" >&2
+        exit 1
+      fi
+      TOKEN="$(tr -d '[:space:]' < "${TOKEN_FILE}")"
+      if [[ -z "${TOKEN}" ]]; then
+        echo "empty registration token in ${TOKEN_FILE}" >&2
+        exit 1
+      fi
+
+      if [[ ! -x "${RUNNER_DIR}/config.sh" ]]; then
+        echo "runner not installed under ${RUNNER_DIR}" >&2
+        exit 1
+      fi
+
+      if [[ -f "${RUNNER_DIR}/.runner" ]]; then
+        echo "runner already configured (${RUNNER_DIR}/.runner); remove with:"
+        echo "  sudo -u runner ${RUNNER_DIR}/config.sh remove --token <TOKEN>"
+        exit 0
+      fi
+
+      cd "${RUNNER_DIR}"
+      sudo -u runner ./config.sh --unattended \
+        --url "${ORG_URL}" \
+        --token "${TOKEN}" \
+        --name "${RUNNER_NAME}" \
+        --labels "${RUNNER_LABELS}" \
+        --work _work \
+        --replace
+
+      # svc.sh must run as root; installs actions.runner.<org>.<name>.service
+      ./svc.sh install runner
+      ./svc.sh start
+
+      if command -v shred >/dev/null 2>&1; then
+        shred -u "${TOKEN_FILE}" || rm -f "${TOKEN_FILE}"
+      else
+        rm -f "${TOKEN_FILE}"
+      fi
+
+      echo "registered ${RUNNER_NAME} for ${ORG_URL} labels=${RUNNER_LABELS}"
+      systemctl --no-pager --full status "actions.runner.*" || true
+
+  - path: /usr/local/sbin/gha-runner-install-binary
+    permissions: "0755"
+    owner: root:root
+    content: |
+      #!/bin/bash
+      # Download latest actions/runner into /opt/actions-runner (bash — not dash).
+      set -euo pipefail
+      install -d -o runner -g runner /opt/actions-runner /etc/gha-runner
+      cd /opt/actions-runner
+      if [[ -x ./config.sh ]]; then
+        echo "actions-runner already present under /opt/actions-runner"
+        exit 0
+      fi
+      TAG="$(curl -fsSL https://api.github.com/repos/actions/runner/releases/latest | jq -r .tag_name)"
+      VER="${TAG#v}"
+      ARCH="x64"
+      TARBALL="actions-runner-linux-${ARCH}-${VER}.tar.gz"
+      curl -fsSL -o "${TARBALL}" \
+        "https://github.com/actions/runner/releases/download/${TAG}/${TARBALL}"
+      tar xzf "${TARBALL}"
+      rm -f "${TARBALL}"
+      ./bin/installdependencies.sh
+      chown -R runner:runner /opt/actions-runner
+      echo "${VER}" > /opt/actions-runner/.runner-version
+      echo "installed actions-runner ${VER}"
+
+runcmd:
+  # Docker: enable and ensure runner can use the socket after reboot.
+  - systemctl enable --now docker
+  - usermod -aG docker runner
+  # Must invoke bash script — cloud-init runcmd runs under /bin/sh (dash).
+  - [ bash, /usr/local/sbin/gha-runner-install-binary ]
+  - [ chmod, "0755", /usr/local/sbin/gha-runner-register ]
+
+final_message: |
+  gha-runner cloud-init finished. Register with host recipe:
+    cd ~/Workspace/microscaler/cylon-images/multipass-gha-runner && just register

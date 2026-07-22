@@ -1,0 +1,122 @@
+# Org-scoped GitHub Actions runner on Multipass (ms02).
+#
+# Specs: 4 vCPU / 16G RAM / 100G disk — Ubuntu 24.04
+# Labels: microscaler,ms02 (plus GitHub defaults self-hosted/linux/X64)
+#
+# Usage (on ms02):
+#   just launch
+#   just register          # needs: gh auth with admin:org
+#   just status
+
+name := "gha-runner-1"
+ubuntu := "24.04"
+cpus := "4"
+memory := "16G"
+disk := "100G"
+org := "microscaler"
+org_url := "https://github.com/microscaler"
+cloud_init := justfile_directory() + "/cloud-init.yaml"
+labels := "microscaler,ms02"
+
+# Launch the Multipass guest and wait for cloud-init (idempotent if VM exists).
+launch:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if multipass info "{{name}}" &>/dev/null; then
+        echo "{{name}} already exists:"
+        multipass info "{{name}}"
+        exit 0
+    fi
+    echo "Launching {{name}} ({{cpus}} cpu / {{memory}} / {{disk}}) ..."
+    multipass launch "{{ubuntu}}" \
+        --name "{{name}}" \
+        --cpus {{cpus}} \
+        --memory {{memory}} \
+        --disk {{disk}} \
+        --cloud-init "{{cloud_init}}"
+    echo "Waiting for cloud-init (Docker + packages) ..."
+    # cloud-init may report error on recoverable runcmd issues; finish runner install explicitly.
+    multipass exec "{{name}}" -- cloud-init status --wait || true
+    just bootstrap-guest
+    multipass info "{{name}}"
+    echo "Next: just register"
+
+# Push helper scripts and ensure actions-runner binary is installed (idempotent).
+bootstrap-guest:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    multipass transfer "{{justfile_directory()}}/gha-runner-install-binary" "{{name}}:/tmp/gha-runner-install-binary"
+    multipass transfer "{{justfile_directory()}}/gha-runner-register" "{{name}}:/tmp/gha-runner-register"
+    multipass exec "{{name}}" -- sudo bash -c '
+      set -euo pipefail
+      install -m 0755 /tmp/gha-runner-install-binary /usr/local/sbin/gha-runner-install-binary
+      install -m 0755 /tmp/gha-runner-register /usr/local/sbin/gha-runner-register
+      systemctl enable --now docker
+      usermod -aG docker runner || true
+      /usr/local/sbin/gha-runner-install-binary
+    '
+
+
+# Fetch a short-lived org registration token and configure the runner service.
+register:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if ! multipass info "{{name}}" &>/dev/null; then
+        echo "{{name}} not found — run: just launch" >&2
+        exit 1
+    fi
+    if [[ -n "${GHA_REGISTRATION_TOKEN:-}" ]]; then
+        TOKEN="${GHA_REGISTRATION_TOKEN}"
+    else
+        TOKEN="$(gh api -X POST "/orgs/{{org}}/actions/runners/registration-token" --jq .token)"
+    fi
+    if [[ -z "${TOKEN}" || "${TOKEN}" == "null" ]]; then
+        echo "failed to obtain registration token (need admin:org or set GHA_REGISTRATION_TOKEN)" >&2
+        exit 1
+    fi
+    # Pipe token into the guest (multipass transfer cannot read host /tmp under snap).
+    printf '%s\n' "${TOKEN}" | multipass exec "{{name}}" -- sudo bash -c '
+      set -euo pipefail
+      install -d -m 0700 /etc/gha-runner
+      cat > /etc/gha-runner/registration-token
+      chmod 0600 /etc/gha-runner/registration-token
+      export GHA_ORG_URL="{{org_url}}"
+      export GHA_RUNNER_NAME="{{name}}"
+      export GHA_RUNNER_LABELS="{{labels}}"
+      /usr/local/sbin/gha-runner-register
+    '
+    echo "Registered. Check org runners:"
+    just status
+
+# Multipass + org runner inventory.
+status:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "=== multipass ==="
+    multipass info "{{name}}" 2>/dev/null || echo "{{name}} not found"
+    echo
+    echo "=== systemd (guest) ==="
+    if multipass info "{{name}}" &>/dev/null; then
+        multipass exec "{{name}}" -- bash -c 'systemctl list-units "actions.runner.*" --no-pager || true'
+        multipass exec "{{name}}" -- bash -c 'test -f /opt/actions-runner/.runner-version && echo -n "runner version: " && cat /opt/actions-runner/.runner-version || true'
+    fi
+    echo
+    echo "=== github.org/{{org}}/actions/runners ==="
+    gh api "/orgs/{{org}}/actions/runners" --jq '.runners[] | {name,status,busy,labels:[.labels[].name]}' 2>/dev/null \
+      || echo "(gh API failed — need admin:org)"
+
+# Stop / start without destroying the disk.
+stop:
+    multipass stop "{{name}}"
+
+start:
+    multipass start "{{name}}"
+
+# Delete the VM permanently.
+purge:
+    multipass delete "{{name}}" --purge 2>/dev/null || true
+    echo "purged {{name}}"
+
+# Smoke: ensure docker works inside the guest as user runner.
+smoke-docker:
+    multipass exec "{{name}}" -- sudo -u runner docker run --rm hello-world

@@ -1,0 +1,21 @@
+#!/bin/bash
+# Download latest actions/runner into /opt/actions-runner (bash — not dash).
+set -euo pipefail
+install -d -o runner -g runner /opt/actions-runner /etc/gha-runner
+cd /opt/actions-runner
+if [[ -x ./config.sh ]]; then
+  echo "actions-runner already present under /opt/actions-runner"
+  exit 0
+fi
+TAG="$(curl -fsSL https://api.github.com/repos/actions/runner/releases/latest | jq -r .tag_name)"
+VER="${TAG#v}"
+ARCH="x64"
+TARBALL="actions-runner-linux-${ARCH}-${VER}.tar.gz"
+curl -fsSL -o "${TARBALL}" \
+  "https://github.com/actions/runner/releases/download/${TAG}/${TARBALL}"
+tar xzf "${TARBALL}"
+rm -f "${TARBALL}"
+./bin/installdependencies.sh
+chown -R runner:runner /opt/actions-runner
+echo "${VER}" > /opt/actions-runner/.runner-version
+echo "installed actions-runner ${VER}"
