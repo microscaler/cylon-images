@@ -11,17 +11,18 @@ base_name := "resurrection-node-base"
 ubuntu := "24.04"
 cloud_init := justfile_directory() + "/cloud-init.yaml"
 cloud_init_merged := env_var("HOME") + "/resurrection-node-cloud-init.yaml"
-node_cpus := "6"
-node_memory := "16G"
+# Parked sizing while Cylon FAR is idle — raise again before active regenesis work.
+node_cpus := "1"
+node_memory := "2G"
 node_disk := "40G"
 
 # Merge git-tracked cloud-init with GITHUB_TOKEN (private release download).
-# Token sources (first match): $GITHUB_TOKEN, ../../tiffany/.env, ../.env, cloud-init.github-token.patch.yaml
+# Token sources (first match): $GITHUB_TOKEN, ../../cylon/.env, ../.env, cloud-init.github-token.patch.yaml
 render-cloud-init:
     #!/usr/bin/env bash
     set -euo pipefail
     if [ -z "$${GITHUB_TOKEN:-}" ]; then
-      for env_file in "../../tiffany/.env" "../.env"; do
+      for env_file in "../../cylon/.env" "../.env"; do
         if [ -f "$${env_file}" ]; then
           set -a
           # shellcheck disable=SC1091
@@ -42,7 +43,7 @@ render-cloud-init:
     elif [ -f "{{justfile_directory()}}/cloud-init.github-token.patch.yaml" ]; then
       cp "{{justfile_directory()}}/cloud-init.github-token.patch.yaml" "$${patch}"
     else
-      echo "GITHUB_TOKEN required (export, ../../tiffany/.env, ../.env, or cloud-init.github-token.patch.yaml)" >&2
+      echo "GITHUB_TOKEN required (export, ../../cylon/.env, ../.env, or cloud-init.github-token.patch.yaml)" >&2
       echo "See cloud-init.github-token.patch.yaml.example" >&2
       exit 1
     fi
@@ -66,9 +67,11 @@ build-base: render-cloud-init
         --cloud-init "{{cloud_init_merged}}"
     echo "Waiting for cloud-init..."
     multipass exec "{{base_name}}" -- cloud-init status --wait
-    multipass exec "{{base_name}}" -- bash -lc 'test -c /dev/kvm && firecracker --version && test -x /usr/local/bin/cylon'
+    echo "Running regenesis-agent base provisioning..."
+    just -f "../../cylon-regenesis/justfile" provision-base "{{base_name}}"
     multipass stop "{{base_name}}"
     echo "{{base_name}} ready (stopped). Clone workers with: just clone-node 1"
+    echo "Then: cd ../../cylon && just resurrection-nodes-finish-regenesis"
 
 # Remove the base instance (does not touch resurrection-node-N workers).
 purge-base:
@@ -92,8 +95,12 @@ clone-node N:
         multipass stop "{{base_name}}"
     fi
     multipass clone "{{base_name}}" -n "$${name}"
+    # Clone inherits base shape; apply current justfile sizing before start.
+    multipass stop "$${name}" 2>/dev/null || true
+    multipass set "local.$${name}.cpus={{node_cpus}}"
+    multipass set "local.$${name}.memory={{node_memory}}"
     multipass start "$${name}"
-    echo "Cloned $${name} — mount workspaces via cylon-local-infra just resurrection-nodes-up."
+    echo "Cloned $${name} ({{node_cpus}} CPU / {{node_memory}}) — mount via cylon resurrection-nodes-up."
 
 # Status of base + worker nodes.
 status:
