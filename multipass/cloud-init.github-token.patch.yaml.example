@@ -1,8 +1,8 @@
 #cloud-config
 # LOCAL ONLY — copy to cloud-init.github-token.patch.yaml and set your PAT, or let
-# `just build-base` generate the merged cloud-init from $GITHUB_TOKEN / ../tiffany/.env
+# `just build-base` generate the merged cloud-init from $GITHUB_TOKEN / ../cylon/.env
 #
-# Required scope: classic PAT with `repo` (private Tiffany releases).
+# Required scope: classic PAT with `repo` (private Cylon releases).
 write_files:
   - path: /etc/cylon/github-token
     permissions: "0600"

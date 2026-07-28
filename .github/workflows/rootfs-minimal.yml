@@ -47,8 +47,23 @@ jobs:
         run: |
           set -euo pipefail
           cd container
-          docker rm -f kind-registry 2>/dev/null || true
-          docker run -d --restart=always -p "0.0.0.0:5001:5000" --name kind-registry registry:2 || true
+          reg_name=kind-registry
+          reg_port=5001
+          need_recreate=false
+          if docker ps -q -f name=^${reg_name}$ | grep -q .; then
+            if ! docker port "${reg_name}" 5000/tcp 2>/dev/null | grep -q 0.0.0.0:; then
+              need_recreate=true
+            fi
+          else
+            need_recreate=true
+          fi
+          if [ "${need_recreate}" = true ]; then
+            docker rm -f "${reg_name}" 2>/dev/null || true
+            docker run -d --restart=always -p "0.0.0.0:${reg_port}:5000" --network bridge --name "${reg_name}" registry:2
+          fi
+          if [ -d ../../shared-kind-cluster ]; then
+            (cd ../../shared-kind-cluster && just registry-wire)
+          fi
           docker build -t cylon-rootfs-minimal:dev rootfs/minimal/
           docker tag cylon-rootfs-minimal:dev "${MS02_LAN_IP}:5001/cylon-rootfs-minimal:dev"
           docker push "${MS02_LAN_IP}:5001/cylon-rootfs-minimal:dev"

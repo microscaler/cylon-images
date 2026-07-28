@@ -7,6 +7,7 @@ Wants=network-online.target
 Type=simple
 Environment=CYLON_SKILLS_ROOT=/opt/cylon/skills
 Environment=RUST_LOG=info
+EnvironmentFile=-/etc/cylon/guest.env
 ExecStart=/usr/local/bin/cylon-guest-brain
 Restart=on-failure
 RestartSec=3

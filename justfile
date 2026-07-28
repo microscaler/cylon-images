@@ -12,10 +12,10 @@ set shell := ["bash", "-uc"]
 default:
 	@just --list
 
-# Copy GITHUB_TOKEN from tiffany/.env (used by multipass render-cloud-init).
+# Copy GITHUB_TOKEN from cylon/.env (used by multipass render-cloud-init).
 sync-github-token:
 	#!/usr/bin/env bash
 	set -euo pipefail
-	grep '^GITHUB_TOKEN=' ../tiffany/.env > .env
+	grep '^GITHUB_TOKEN=' ../cylon/.env > .env
 	chmod 600 .env
 	echo "Synced GITHUB_TOKEN to cylon-images/.env"

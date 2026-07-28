@@ -21,3 +21,12 @@ just push-rootfs-minimal
 ```
 
 **CI:** `.github/workflows/kernel.yml` and `rootfs.yml` use paths under `container/`.
+
+**Published (GHCR):**
+
+```bash
+docker pull ghcr.io/microscaler/cylon-kernel:6.1.102
+docker pull ghcr.io/microscaler/cylon-rootfs-ubuntu:latest
+```
+
+Extract kernel: `just pull-kernel-from-ghcr` → `artifacts/vmlinux`.
