@@ -1,0 +1,3 @@
+# The skills checkout is a build input, not a nested source-control checkout.
+# In CI its .git/config may contain a temporary authentication header.
+cylon-skills-registry/.git

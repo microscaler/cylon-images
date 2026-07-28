@@ -1,5 +1,10 @@
 # Resurrection-node Multipass images
 
+> **Deprecated:** this path is frozen and unsupported. Aether now runs direct
+> QEMU/KVM, using the Dockerfile-built bundle under [`container/kvm`](../container/kvm/).
+> Creation and cloning recipes fail closed; `status` and `purge-base` remain
+> only for inspecting or removing historical local instances.
+
 **Resurrection nodes** are Multipass guests on bare-metal dev hosts (e.g. ms02) that run the **Cylon host daemon** (`crates/cylon`) and host nested **Firecracker microVMs**. They are distinct from:
 
 | Surface | Where | Role |

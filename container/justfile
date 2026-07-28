@@ -81,18 +81,18 @@ pull-rootfs-ubuntu-from-ghcr:
 	docker pull {{ghcr_rootfs_ubuntu}}
 	@echo "Pulled {{ghcr_rootfs_ubuntu}}"
 
-# Stage GHCR kernel on resurrection-node-N (N=1|2|3).
-stage-kernel-from-ghcr node="1": pull-kernel-from-ghcr
-	multipass transfer {{container_dir}}/artifacts/vmlinux resurrection-node-{{node}}:/tmp/vmlinux
-	multipass exec resurrection-node-{{node}} -- sudo install -o cylon -g cylon -m 644 /tmp/vmlinux /home/cylon/cylon-images/vmlinux
-	@echo "Installed GHCR kernel on resurrection-node-{{node}}"
+# Retain old recipe names only to stop legacy automation before it touches a VM.
+stage-kernel-from-ghcr node="1":
+	@echo "stage-kernel-from-ghcr {{node}} retired: Multipass is unsupported; use the Aether KVM bundle" >&2
+	@exit 2
 
-stage-kernel-from-ghcr-all: (stage-kernel-from-ghcr "1") (stage-kernel-from-ghcr "2") (stage-kernel-from-ghcr "3")
+stage-kernel-from-ghcr-all:
+	@echo "stage-kernel-from-ghcr-all retired: Multipass is unsupported; use the Aether KVM bundle" >&2
+	@exit 2
 
-# Copy locally built kernel to resurrection-node-1 (offline / CI artifact path).
 stage-kernel-node-1:
-	multipass transfer {{container_dir}}/artifacts/vmlinux resurrection-node-1:/tmp/vmlinux
-	multipass exec resurrection-node-1 -- sudo install -o cylon -g cylon -m 644 /tmp/vmlinux /home/cylon/cylon-images/vmlinux
+	@echo "stage-kernel-node-1 retired: Multipass is unsupported; use the Aether KVM bundle" >&2
+	@exit 2
 
 # Build the Ubuntu Rootfs OCI image used by Cylon to create ext4 overlays
 build-rootfs version="latest":

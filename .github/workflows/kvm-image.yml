@@ -1,0 +1,93 @@
+name: Aether KVM guest image
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "container/kvm/**"
+      - "container/rootfs/ubuntu/**"
+      - ".github/workflows/kvm-image.yml"
+  push:
+    branches: [main]
+    paths:
+      - "container/kvm/**"
+      - "container/rootfs/ubuntu/**"
+      - ".github/workflows/kvm-image.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout cylon-images
+        uses: actions/checkout@v4
+
+      - name: Checkout cylon-skills into the guest build context
+        uses: actions/checkout@v4
+        with:
+          repository: microscaler/cylon-skills
+          path: container/rootfs/ubuntu/cylon-skills-registry
+          persist-credentials: false
+
+      - name: Verify compatible skills input
+        run: |
+          set -euo pipefail
+          test -f container/rootfs/ubuntu/cylon-skills-registry/registry.json
+          git -C container/rootfs/ubuntu/cylon-skills-registry rev-parse HEAD
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Dockerfile guest filesystem
+        run: |
+          set -euo pipefail
+          docker build \
+            --tag cylon-rootfs-ubuntu:${GITHUB_SHA} \
+            container/rootfs/ubuntu
+
+      - name: Build native KVM artifact
+        run: |
+          set -euo pipefail
+          docker build \
+            --build-arg ROOTFS_IMAGE=cylon-rootfs-ubuntu:${GITHUB_SHA} \
+            --tag aether-kvm-ubuntu:${GITHUB_SHA} \
+            container/kvm
+
+      - name: Verify image contract and qcow2 integrity
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y qemu-utils
+          # The scratch artifact has no default command; create never executes this.
+          cid="$(docker create aether-kvm-ubuntu:${GITHUB_SHA} /bin/true)"
+          output="$(mktemp -d)"
+          cleanup() {
+            docker rm -f "${cid}" >/dev/null 2>&1 || true
+            rm -rf "${output}"
+          }
+          trap cleanup EXIT
+          for file in image.json rootfs.qcow2 vmlinuz initrd.img; do
+            docker cp "${cid}:/${file}" "${output}/${file}"
+            test -s "${output}/${file}"
+          done
+          jq -e '.schemaVersion == 1 and .disk.format == "qcow2"' "${output}/image.json"
+          qemu-img check -f qcow2 "${output}/rootfs.qcow2"
+
+      - name: Push immutable and rolling tags
+        if: github.event_name != 'pull_request'
+        run: |
+          set -euo pipefail
+          target="ghcr.io/${GITHUB_REPOSITORY_OWNER}/aether-kvm-ubuntu"
+          docker tag aether-kvm-ubuntu:${GITHUB_SHA} "${target}:${GITHUB_SHA}"
+          docker tag aether-kvm-ubuntu:${GITHUB_SHA} "${target}:latest"
+          docker push "${target}:${GITHUB_SHA}"
+          docker push "${target}:latest"

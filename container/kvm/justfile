@@ -1,0 +1,41 @@
+set shell := ["bash", "-uc"]
+
+kvm_dir := justfile_directory()
+container_dir := kvm_dir / ".."
+image_name := "aether-kvm-ubuntu"
+ghcr_image := "ghcr.io/microscaler/aether-kvm-ubuntu"
+
+default:
+    @just --list
+
+# Build the Dockerfile-based guest rootfs, then package it for native Aether KVM.
+build version="dev" disk_size="16G":
+    just --justfile {{ container_dir }}/justfile build-rootfs {{ version }}
+    docker build \
+        --build-arg ROOTFS_IMAGE=cylon-rootfs-ubuntu:{{ version }} \
+        --build-arg DISK_SIZE={{ disk_size }} \
+        --tag {{ image_name }}:{{ version }} \
+        {{ kvm_dir }}
+
+# Verify the four fixed files consumed by aetherd's image-contract v1.
+verify version="dev":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # The scratch artifact intentionally has no executable or default command.
+    # `docker create` still needs a command, but does not execute it.
+    cid="$(docker create {{ image_name }}:{{ version }} /bin/true)"
+    cleanup() { docker rm -f "${cid}" >/dev/null 2>&1 || true; }
+    trap cleanup EXIT
+    output="$(mktemp -d)"
+    trap 'cleanup; rm -rf "${output}"' EXIT
+    for file in image.json rootfs.qcow2 vmlinuz initrd.img; do
+      docker cp "${cid}:/${file}" "${output}/${file}"
+      test -s "${output}/${file}"
+    done
+    jq -e '.schemaVersion == 1 and .disk.format == "qcow2"' "${output}/image.json" >/dev/null
+    qemu-img check -f qcow2 "${output}/rootfs.qcow2"
+    echo "Aether KVM image contract verified"
+
+push version="latest": (build version) (verify version)
+    docker tag {{ image_name }}:{{ version }} {{ ghcr_image }}:{{ version }}
+    docker push {{ ghcr_image }}:{{ version }}

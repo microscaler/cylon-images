@@ -1,106 +1,34 @@
-# Resurrection-node Multipass base image (ms02 / any nested-KVM host).
+# Historical Resurrection-node Multipass recipes.
 #
-# Strategy:
-#   1. build-base  — launch + cloud-init → stopped `resurrection-node-base`
-#   2. clone-node  — fast rollout of `resurrection-node-N` from the base disk
-#
-# cloud-init.yaml is the portable artifact in git; the base instance is the local
-# clone source (Multipass has no cross-host image registry yet).
+# New provisioning is intentionally blocked. Aether owns direct QEMU/KVM and
+# container/kvm owns the Dockerfile-to-VM artifact conversion. Status and purge
+# remain available only to inspect or remove old local instances.
 
 base_name := "resurrection-node-base"
 ubuntu := "24.04"
-cloud_init := justfile_directory() + "/cloud-init.yaml"
-cloud_init_merged := env_var("HOME") + "/resurrection-node-cloud-init.yaml"
-# Parked sizing while Cylon FAR is idle — raise again before active regenesis work.
-node_cpus := "1"
-node_memory := "2G"
-node_disk := "40G"
 
-# Merge git-tracked cloud-init with GITHUB_TOKEN (private release download).
-# Token sources (first match): $GITHUB_TOKEN, ../../cylon/.env, ../.env, cloud-init.github-token.patch.yaml
+default:
+    @echo "Multipass images are retired; use 'just kvm-build' from the repository root" >&2
+    @exit 2
+
+# Prevent legacy automation from materializing token-bearing Cloud-Init files.
 render-cloud-init:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ -z "$${GITHUB_TOKEN:-}" ]; then
-      for env_file in "../../cylon/.env" "../.env"; do
-        if [ -f "$${env_file}" ]; then
-          set -a
-          # shellcheck disable=SC1091
-          source "$${env_file}"
-          set +a
-          break
-        fi
-      done
-    fi
-    patch="$$(mktemp)"
-    secret="$${patch}.secret"
-    trap 'rm -f "$${patch}" "$${secret}"' EXIT
-    if [ -n "$${GITHUB_TOKEN:-}" ]; then
-      printf '%s\n' "$${GITHUB_TOKEN}" > "$${secret}"
-      cp "{{justfile_directory()}}/cloud-init.github-token.patch.template.yaml" "$${patch}"
-      b64="$$(base64 -w0 < "$${secret}")"
-      sed --in-place "s|PLACEHOLDER|$${b64}|" "$${patch}"
-    elif [ -f "{{justfile_directory()}}/cloud-init.github-token.patch.yaml" ]; then
-      cp "{{justfile_directory()}}/cloud-init.github-token.patch.yaml" "$${patch}"
-    else
-      echo "GITHUB_TOKEN required (export, ../../cylon/.env, ../.env, or cloud-init.github-token.patch.yaml)" >&2
-      echo "See cloud-init.github-token.patch.yaml.example" >&2
-      exit 1
-    fi
-    python3 "{{justfile_directory()}}/merge_cloud_init.py" "{{cloud_init}}" "$${patch}" "{{cloud_init_merged}}"
-    chmod 600 "{{cloud_init_merged}}"
-    echo "Rendered {{cloud_init_merged}} (mode 600 — contains token; delete after build-base if desired)"
+    @echo "render-cloud-init retired: use the Docker-built Aether KVM image" >&2
+    @exit 2
 
-# Launch and provision the stopped base instance (idempotent if base already exists).
-build-base: render-cloud-init
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if multipass info "{{base_name}}" &>/dev/null; then
-        echo "{{base_name}} already exists — delete with 'just purge-base' to rebuild."
-        multipass info "{{base_name}}"
-        exit 0
-    fi
-    echo "Building {{base_name}} from {{cloud_init_merged}} ..."
-    multipass launch "{{ubuntu}}" \
-        --name "{{base_name}}" \
-        --cpus {{node_cpus}} --memory {{node_memory}} --disk {{node_disk}} \
-        --cloud-init "{{cloud_init_merged}}"
-    echo "Waiting for cloud-init..."
-    multipass exec "{{base_name}}" -- cloud-init status --wait
-    echo "Running regenesis-agent base provisioning..."
-    just -f "../../cylon-regenesis/justfile" provision-base "{{base_name}}"
-    multipass stop "{{base_name}}"
-    echo "{{base_name}} ready (stopped). Clone workers with: just clone-node 1"
-    echo "Then: cd ../../cylon && just resurrection-nodes-finish-regenesis"
+# Refuse to create new nested-KVM hosts.
+build-base:
+    @echo "build-base retired: Aether runs QEMU/KVM directly" >&2
+    @exit 2
 
 # Remove the base instance (does not touch resurrection-node-N workers).
 purge-base:
-    multipass delete "{{base_name}}" --purge 2>/dev/null || true
+    multipass delete "{{ base_name }}" --purge 2>/dev/null || true
 
-# Clone resurrection-node-N from the base (N=1|2|3|…).
+# Refuse to expand an old Multipass fleet.
 clone-node N:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    name="resurrection-node-{{N}}"
-    if multipass info "$${name}" &>/dev/null; then
-        echo "$${name} already exists."
-        exit 0
-    fi
-    if ! multipass info "{{base_name}}" &>/dev/null; then
-        echo "Run 'just build-base' first."
-        exit 1
-    fi
-    state=$$(multipass info "{{base_name}}" | awk '/State/ {print $$2}')
-    if [[ "$${state}" != "Stopped" ]]; then
-        multipass stop "{{base_name}}"
-    fi
-    multipass clone "{{base_name}}" -n "$${name}"
-    # Clone inherits base shape; apply current justfile sizing before start.
-    multipass stop "$${name}" 2>/dev/null || true
-    multipass set "local.$${name}.cpus={{node_cpus}}"
-    multipass set "local.$${name}.memory={{node_memory}}"
-    multipass start "$${name}"
-    echo "Cloned $${name} ({{node_cpus}} CPU / {{node_memory}}) — mount via cylon resurrection-nodes-up."
+    @echo "clone-node {{ N }} retired: there is no supported Multipass fleet" >&2
+    @exit 2
 
 # Status of base + worker nodes.
 status:

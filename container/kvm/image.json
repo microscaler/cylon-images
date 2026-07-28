@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "architecture": "x86_64",
+  "disk": {
+    "path": "rootfs.qcow2",
+    "format": "qcow2"
+  },
+  "kernelPath": "vmlinuz",
+  "initrdPath": "initrd.img",
+  "rootDevice": "/dev/vda",
+  "kernelArgs": [
+    "rw",
+    "rootfstype=ext4",
+    "console=ttyS0,115200n8",
+    "panic=1"
+  ]
+}

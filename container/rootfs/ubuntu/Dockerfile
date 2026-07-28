@@ -3,8 +3,9 @@ FROM ubuntu:25.04
 # Expose buildx platform target argument
 ARG TARGETARCH
 
-# A minimal Ubuntu 25.04 image specifically tailored to be extracted into an ext4 rootfs for Firecracker
-# This image contains the core lifecycle dependencies necessary for Cylon to orchestrate and proxy the microVM.
+# Ubuntu guest filesystem composed as a container image, then extracted into an
+# ext4/qcow2 base for Aether native KVM. The same userspace remains available to
+# the optional Cylon FAR compatibility runtime.
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -47,6 +48,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     software-properties-common \
     systemd \
+    cloud-init \
+    qemu-guest-agent \
     python3 \
     python3-minimal \
     python3-pip \
@@ -162,6 +165,6 @@ COPY tools/bin/ /opt/cylon/bin/
 COPY tools/etc/ /etc/cylon/tools.d/
 RUN chmod +x /opt/cylon/bin/*
 
-# Cylon specific configuration: Ensure systemd handles the init sequence seamlessly inside the VM
+# Ensure systemd handles the init sequence seamlessly inside the VM.
 STOPSIGNAL SIGRTMIN+3
 CMD ["/sbin/init"]

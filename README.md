@@ -4,12 +4,15 @@
   <p><em>By your command.</em></p>
 </div>
 
-This repository builds artifacts for the Cylon Resurrection Platform in two layers:
+This repository builds Docker-composed guest artifacts. The primary output is
+an OCI-distributed native KVM bundle consumed directly by Aether.
 
 | Directory | Target | Output |
 |---|---|---|
-| [`container/`](container/) | Firecracker **microVM** guest | `vmlinux`, OCI rootfs → GHCR |
-| [`multipass/`](multipass/) | **Resurrection-node** host OS | Multipass cloud-init + clones |
+| [`container/kvm/`](container/kvm/) | Aether native QEMU/KVM guest | `image.json`, qcow2, kernel and initramfs → GHCR |
+| [`container/rootfs/`](container/rootfs/) | Dockerfile guest composition | OCI rootfs with compatible `cylon-skills` |
+| [`container/kernel/`](container/kernel/) | Legacy Firecracker compatibility | `vmlinux` → GHCR |
+| [`multipass/`](multipass/) | **Retired** development host path | Historical cleanup material only |
 | [`multipass-gha-runner/`](multipass-gha-runner/) | ~~Org GHA runner~~ **DEPRECATED** | Use ARC in `shared-gitops-k8s-cluster` (`docs/gha-arc.md`) |
 
 > **Kernel note:** Firecracker guest configs — [firecracker guest_configs](https://github.com/firecracker-microvm/firecracker/tree/main/resources/guest_configs)
@@ -20,15 +23,14 @@ This repository builds artifacts for the Cylon Resurrection Platform in two laye
 # Repo root — all recipes via import
 just --list
 
-# MicroVM container artifacts
-just build-kernel
-just build-rootfs          # needs sibling ../cylon-skills
-just push-rootfs-minimal   # ms02 dev registry
-
-# Multipass resurrection nodes
-just build-base
-just clone-node 1
+# Native KVM artifact (rootfs build needs sibling ../cylon-skills)
+just kvm-build dev
+just kvm-verify dev
 ```
+
+Multipass is not a supported development or production path. Its old recipes
+are no longer imported by the repository root and creation commands fail
+closed if invoked directly.
 
 ## CI
 
@@ -36,6 +38,7 @@ just clone-node 1
 |---|---|---|
 | [`kernel.yml`](.github/workflows/kernel.yml) | `container/kernel/**` | `ghcr.io/.../cylon-kernel:6.1.102` |
 | [`rootfs.yml`](.github/workflows/rootfs.yml) | `container/rootfs/**` | `ghcr.io/.../cylon-rootfs-ubuntu:latest` |
+| [`kvm-image.yml`](.github/workflows/kvm-image.yml) | `container/kvm/**`, `container/rootfs/ubuntu/**` | `ghcr.io/.../aether-kvm-ubuntu:<sha>` and `latest` |
 
 Rootfs CI checks out `microscaler/cylon-skills` into `container/rootfs/ubuntu/cylon-skills-registry` before `docker build`.
 

@@ -28,6 +28,7 @@ jobs:
         with:
           repository: microscaler/cylon-skills
           path: container/rootfs/ubuntu/cylon-skills-registry
+          persist-credentials: false
 
       - name: Verify skills registry is present
         run: |
@@ -60,6 +61,7 @@ jobs:
         with:
           repository: microscaler/cylon-skills
           path: container/rootfs/ubuntu/cylon-skills-registry
+          persist-credentials: false
 
       - name: Verify skills registry is present
         run: |
