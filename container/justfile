@@ -9,15 +9,32 @@ dev_registry_host := env_var_or_default("MS02_LAN_IP", "192.168.1.189")
 ghcr_kernel := "ghcr.io/microscaler/cylon-kernel:6.1.102"
 ghcr_rootfs_ubuntu := "ghcr.io/microscaler/cylon-rootfs-ubuntu:latest"
 
-# Bind local registry on all interfaces so resurrection nodes can pull OCI layers.
+# Bind local registry on all interfaces (Multipass nodes) and wire into Kind (Tilt pulls).
 expose-dev-registry:
 	#!/usr/bin/env bash
 	set -euo pipefail
-	docker rm -f {{dev_registry}} 2>/dev/null || true
-	docker run -d --restart=always \
-		-p "0.0.0.0:{{dev_registry_port}}:5000" \
-		--name {{dev_registry}} registry:2
-	echo "Dev registry: {{dev_registry_host}}:{{dev_registry_port}}"
+	reg_name='{{dev_registry}}'
+	reg_port={{dev_registry_port}}
+	need_recreate=false
+	if docker ps -q -f name=^${reg_name}$ | grep -q .; then
+	  if ! docker port "${reg_name}" 5000/tcp 2>/dev/null | grep -q 0.0.0.0:; then
+	    need_recreate=true
+	  fi
+	else
+	  need_recreate=true
+	fi
+	if [ "${need_recreate}" = true ]; then
+	  docker rm -f "${reg_name}" 2>/dev/null || true
+	  docker run -d --restart=always \
+	    -p "0.0.0.0:${reg_port}:5000" \
+	    --network bridge \
+	    --name "${reg_name}" registry:2
+	fi
+	shared_kind="$(cd "{{justfile_directory()}}/../.." && pwd)/shared-kind-cluster"
+	if [ -d "${shared_kind}" ]; then
+	  (cd "${shared_kind}" && just registry-wire)
+	fi
+	echo "Dev registry: {{dev_registry_host}}:{{dev_registry_port}} (Kind wired)"
 
 # One-time ms02 host setup: allow plain-HTTP pushes/pulls to the dev registry.
 configure-docker-insecure-registries:

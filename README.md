@@ -42,6 +42,36 @@ closed if invoked directly.
 
 Rootfs CI checks out `microscaler/cylon-skills` into `container/rootfs/ubuntu/cylon-skills-registry` before `docker build`.
 
+## Published images (GHCR)
+
+Production microVM artifacts — built by CI on push to `main`:
+
+```bash
+docker pull ghcr.io/microscaler/cylon-kernel:6.1.102
+docker pull ghcr.io/microscaler/cylon-rootfs-ubuntu:latest
+```
+
+| Image | Tag | Contents |
+|---|---|---|
+| `ghcr.io/microscaler/cylon-kernel` | `6.1.102` | Firecracker guest `vmlinux` (scratch OCI — extract `/vmlinux`) |
+| `ghcr.io/microscaler/cylon-rootfs-ubuntu` | `latest` | Full Ubuntu agent guest + baked cylon-skills registry |
+
+**Version matrix**
+
+| Kernel tag | Rootfs tag | Linux guest config | cylon-skills |
+|---|---|---|---|
+| `6.1.102` | `latest` | Firecracker `guest_configs` 6.1.102 | Baked at rootfs CI build |
+
+**Consume on ms02**
+
+```bash
+just pull-kernel-from-ghcr          # → container/artifacts/vmlinux
+just stage-kernel-from-ghcr 1     # copy vmlinux to resurrection-node-1
+just pull-rootfs-ubuntu-from-ghcr # verify pull; cylon host pulls at CreateCylonVm time
+```
+
+Resurrection-node cloud-init installs the GHCR kernel (not the Firecracker S3 quickstart blob). Dev-only minimal rootfs stays on the local `:5001` registry (`just push-rootfs-minimal`).
+
 ## The Thirteen Personalities
 
 > *There are many copies. And they have a plan.*
